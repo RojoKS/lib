@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "public": "i dont know",
+    "public": "/projektTelefon/regio-direkt",
     "ignore": [
       "firebase.json",
       "**/.*",
