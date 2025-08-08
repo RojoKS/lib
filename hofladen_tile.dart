@@ -22,7 +22,7 @@ class HofladenTile extends StatelessWidget {
           "${hofladen.adresse}\n${hofladen.kategorien.join(', ')}",
         ),
         trailing: Text(hofladen.entfernung),
-        isThreeLine: true,
+        isThreeLine: false,
       ),
     );
   }
