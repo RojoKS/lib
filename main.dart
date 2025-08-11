@@ -3,6 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'hofladen.dart';
 import 'hofladen_tile.dart';
 import 'standort_service.dart';
+import 'places_service.dart';
 import 'auth_service.dart';
 
 void main() {
@@ -30,75 +31,47 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<Hofladen> alleHoflaeden = [
-    Hofladen(
-      name: "Biohof Müller",
-      adresse: "Wiesenstraße 12, 34123 Kassel",
-      entfernung: "",
-      kategorien: ["Obst", "Eier", "Honig"],
-      bilder: Image.asset('assets/images/farm3.jpg'),
-      lat: 51.2501,
-      lng: 9.4085,
-    ),
-    Hofladen(
-      name: "Hofladen Schmitt",
-      adresse: "Landweg 7, 34225 Baunatal",
-      entfernung: "",
-      kategorien: ["Milch", "Fleisch", "Gemüse"],
-      bilder: Image.asset('assets/images/farm1.jpg'),
-      lat: 51.3127,
-      lng: 9.4797,
-    ),
-    Hofladen(
-      name: "Frisch & Regional",
-      adresse: "Am Feld 3, 34128 Kassel",
-      entfernung: "",
-      kategorien: ["Brot", "Obst", "Gemüse"],
-      bilder: Image.asset('assets/images/farm2.jpg'),
-      lat: 51.3205,
-      lng: 9.4467,
-    ),
-  ];
-
   List<Hofladen> naheHoflaeden = [];
   String? _ausgewaehlteKategorie;
+  bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _ladeStandortUndFiltere();
+    _ladeStandortUndHoflaeden();
   }
 
-  Future<void> _ladeStandortUndFiltere() async {
-    final position = await StandortService.getStandort();
-    if (position == null) return;
-
-    final List<Hofladen> gefiltert = [];
-    for (var hof in alleHoflaeden) {
-      double distanz = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        hof.lat,
-        hof.lng,
-      );
-      if (distanz <= 20000) {
-        gefiltert.add(
-          Hofladen(
-            name: hof.name,
-            adresse: hof.adresse,
-            entfernung: "${(distanz / 1000).toStringAsFixed(1)} km",
-            kategorien: hof.kategorien,
-            bilder: hof.bilder,
-            lat: hof.lat,
-            lng: hof.lng,
-          ),
-        );
-      }
-    }
-
+  Future<void> _ladeStandortUndHoflaeden() async {
+    // Setze den Ladezustand, damit der Nutzer eine Rückmeldung bekommt.
     setState(() {
-      naheHoflaeden = gefiltert;
+      _isLoading = true;
+      _errorMessage = null;
     });
+
+    try {
+      // 1. Standort abfragen
+      final position = await StandortService.getStandort();
+      if (position == null) {
+        throw Exception("Standort konnte nicht ermittelt werden.");
+      }
+
+      // 2. Hofläden über den neuen Service suchen
+      final gefundeneHoflaeden = await PlacesService.findHoflaeden(position);
+
+      // 3. UI mit den neuen Daten aktualisieren
+      setState(() {
+        naheHoflaeden = gefundeneHoflaeden;
+        _isLoading = false;
+      });
+    } catch (e) {
+      // Fehler abfangen und eine Nachricht für den Nutzer setzen.
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
+      print(e); // Fehler in der Konsole ausgeben für die Entwicklung.
+    }
   }
 
   Widget _buildCategoryChip(String kategorie, IconData icon) {
@@ -216,15 +189,26 @@ class _HomeScreenState extends State<HomeScreen> {
               _ausgewaehlteKategorie ?? 'Hofläden in deiner Nähe',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
-            const SizedBox(height: 16),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: anzeigeHoflaeden.length,
-              itemBuilder: (context, index) {
-                return HofladenTile(hofladen: anzeigeHoflaeden[index]);
-              },
-            ),
+            const SizedBox(height: 24),
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_errorMessage != null)
+              Center(
+                child: Text(
+                  'Ein Fehler ist aufgetreten:\n$_errorMessage',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: anzeigeHoflaeden.length,
+                itemBuilder: (context, index) {
+                  return HofladenTile(hofladen: anzeigeHoflaeden[index]);
+                },
+              ),
           ],
         ),
       ),
